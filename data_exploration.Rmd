@@ -1,5 +1,5 @@
 ---
-title: "R Notebook"
+title: "Data Exploration, ITT, CACE, and CACE with IVY"
 output: pdf_document
 ---
 
@@ -64,7 +64,6 @@ clean_initial_data <- function(data, treatment = FALSE) {
   
   # makes iphone column binary (iphone = 1, android = 0)
   #data$iphone <- as.numeric(data$iphone == 'IPhone')
-  data[, iphone_binary := ifelse(iphone == 'IPhone', 1, 0)]
   
   # standardizing 'United States' label
   data$country <- ifelse((data$country == 'Mexico')|(data$country == 'MX')|(data$country == 'Mx')|(data$country == 'mexico')|(data$country == 'México'),             'Mexico', 'United States' )
@@ -113,8 +112,8 @@ clean_final_data <- function(data, treatment = FALSE) {
   data <- data[complete_vec,]
   
   # makes iphone column binary (iphone = 1, android = 0)
-  data[, iphone_binary := ifelse(iphone == 'IPhone', 1, 0)] #$iphone <- as.numeric(data$iphone == 'IPhone')
-  
+  #data[, iphone_binary := ifelse(iphone == 'IPhone', 1, 0)] #$iphone <- as.numeric(data$iphone == 'IPhone')
+  #data[is.na(iphone_binary), iphone_binary:=0]
   # averages screen time 
   data[, screen_time_avg_final := (rowMeans(data[,c('screen_time_1', 'screen_time_2', 'screen_time_3')]))]
   
@@ -223,11 +222,13 @@ ggplot(data, aes(`diff`, fill = factor(treatment))) + geom_histogram(alpha = 0.2
 ```{r}
 data[, greyscale_binary := ifelse(greyscale =='Yes', 1, 0)]
 data[is.na(greyscale_binary), greyscale_binary:=0]
+data[, iphone_binary := ifelse(iphone == 'IPhone', 1, 0)]
+data[is.na(iphone_binary), iphone_binary:=0]
 ```
 
 
 ```{r}
-simple_itt <- data[, lm(screen_time_avg_final ~ treatment + screen_time_avg_initial + as.factor(country))]
+simple_itt <- data[, lm(screen_time_avg_final ~ treatment + screen_time_avg_initial + as.factor(country) + iphone_binary)]
 simple_itt$vcovCL_val <- vcovCL(simple_itt)
 itt_test <- coeftest(x = simple_itt, level = 0.95, vcov. = simple_itt$vcovCL_val)
 itt_test
@@ -238,14 +239,11 @@ itt_d
 cace <- coef(simple_itt)[2]/coef(itt_d)[2]
 cace
 
-
-#cace2 <- coeftest(simple_itt,vcovHC(simple_itt))/coeftest(itt_d,vcovHC(itt_d))
-data
 ```
 # Use Ivyreg to calculate CACE with SE
 ```{r}
 library("ivreg")
-ivyreg <- data[, ivreg(screen_time_avg_final ~ treatment |greyscale_binary + screen_time_avg_initial + as.factor(country) + iphone_bi)]
+ivyreg <- data[, ivreg(screen_time_avg_final ~ treatment |greyscale_binary + screen_time_avg_initial + as.factor(country) + iphone_binary)]
 ivyreg$vcovCL_val <- vcovCL(ivyreg)
 ivyreg_test <- coeftest(x = ivyreg, level = 0.95, vcov. = ivyreg$vcovCL_val)
 ivyreg_test
