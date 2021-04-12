@@ -225,7 +225,7 @@ data[is.na(greyscale_binary), greyscale_binary:=0]
 
 
 ```{r}
-simple_itt <- data[, lm(screen_time_avg_final ~ treatment + screen_time_avg_initial + country)]
+simple_itt <- data[, lm(screen_time_avg_final ~ treatment + screen_time_avg_initial + as.factor(country))]
 simple_itt$vcovCL_val <- vcovCL(simple_itt)
 itt_test <- coeftest(x = simple_itt, level = 0.95, vcov. = simple_itt$vcovCL_val)
 itt_test
@@ -237,9 +237,18 @@ cace <- coef(simple_itt)[2]/coef(itt_d)[2]
 cace
 
 
-cace2 <- coeftest(simple_itt,vcovHC(simple_itt))/coeftest(itt_d,vcovHC(itt_d))
-
+#cace2 <- coeftest(simple_itt,vcovHC(simple_itt))/coeftest(itt_d,vcovHC(itt_d))
+data
 ```
+# Use Ivyreg to calculate CACE with SE
+```{r}
+library("ivreg")
+ivyreg <- data[, ivreg(screen_time_avg_final ~ treatment |greyscale_binary + screen_time_avg_initial + as.factor(country))]
+ivyreg$vcovCL_val <- vcovCL(ivyreg)
+ivyreg_test <- coeftest(x = ivyreg, level = 0.95, vcov. = ivyreg$vcovCL_val)
+ivyreg_test
+```
+
 ```{r}
 
 idx <- sample.int(nrow(data), 10)
