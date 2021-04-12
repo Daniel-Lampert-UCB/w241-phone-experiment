@@ -21,6 +21,7 @@ treatment_initial <- read_excel('groupA_initial.xlsx')
 control_initial <- read_excel("groupB_initial.xlsx")
 treatment_final <- read_excel('groupA_final.xlsx')
 control_final <- read_excel("groupB_final.xlsx")
+
 ```
 
 
@@ -62,7 +63,8 @@ clean_initial_data <- function(data, treatment = FALSE) {
   data <- data[complete_vec,]
   
   # makes iphone column binary (iphone = 1, android = 0)
-  data$iphone <- as.numeric(data$iphone == 'IPhone')
+  #data$iphone <- as.numeric(data$iphone == 'IPhone')
+  data[, iphone_binary := ifelse(iphone == 'IPhone', 1, 0)]
   
   # standardizing 'United States' label
   data$country <- ifelse((data$country == 'Mexico')|(data$country == 'MX')|(data$country == 'Mx')|(data$country == 'mexico')|(data$country == 'México'),             'Mexico', 'United States' )
@@ -111,7 +113,7 @@ clean_final_data <- function(data, treatment = FALSE) {
   data <- data[complete_vec,]
   
   # makes iphone column binary (iphone = 1, android = 0)
-  data$iphone <- as.numeric(data$iphone == 'IPhone')
+  data[, iphone_binary := ifelse(iphone == 'IPhone', 1, 0)] #$iphone <- as.numeric(data$iphone == 'IPhone')
   
   # averages screen time 
   data[, screen_time_avg_final := (rowMeans(data[,c('screen_time_1', 'screen_time_2', 'screen_time_3')]))]
@@ -243,7 +245,7 @@ data
 # Use Ivyreg to calculate CACE with SE
 ```{r}
 library("ivreg")
-ivyreg <- data[, ivreg(screen_time_avg_final ~ treatment |greyscale_binary + screen_time_avg_initial + as.factor(country))]
+ivyreg <- data[, ivreg(screen_time_avg_final ~ treatment |greyscale_binary + screen_time_avg_initial + as.factor(country) + iphone_bi)]
 ivyreg$vcovCL_val <- vcovCL(ivyreg)
 ivyreg_test <- coeftest(x = ivyreg, level = 0.95, vcov. = ivyreg$vcovCL_val)
 ivyreg_test
