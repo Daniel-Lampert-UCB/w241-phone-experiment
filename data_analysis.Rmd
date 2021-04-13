@@ -2,6 +2,7 @@
 title: "Data Exploration, ITT, CACE, and CACE with IVY"
 output: pdf_document
 ---
+# w241 Final Project: Clean Data and Basic Analysis
 
 ```{r}
 library('data.table')
@@ -12,8 +13,11 @@ library('tidyverse')
 library('sandwich')
 library('lmtest')
 library("ivreg")
+library("stargazer")
+robust_se <- function(mod, type = 'HC3') { 
+  sqrt(diag(vcovHC(mod, type)))
+  }
 ```
-# w241 Final Project: Clean Data and Basic Analysis
 
 ## Read in data
 
@@ -25,7 +29,6 @@ treatment_final <- read_excel('groupA_final.xlsx')
 control_final <- read_excel("groupB_final.xlsx")
 
 ```
-
 
 
 ## Cleaning data
@@ -195,6 +198,8 @@ ggplot(data, aes(`diff`, fill = factor(treatment))) + geom_histogram(alpha = 0.2
 
 ## Estimating ATE, ITT, and CACE ignoring attrition
 
+**A quick review:** The Average Treatment Effect (ATE) measures the effect of treatment on randomly selected person. Intent-to-Treat (ITT) measures the effect of being made eligible for treatment, regardless of the fraction of the treatment group that's actually treated. The Complier Average Causal Effect (CACE) is the average treatment effect of compliers. It can also be defined as ITT/ITT_D, where ITT_D is the difference between the proportion of subjects who are treated in the event that they are assigned to the treatment group and the proportion who would be treated even if they had been assigned to the control group.
+
 ```{r}
 # making greyscale (receiving treatment) and iphone variables binary for analysis
 
@@ -235,13 +240,31 @@ coeftest(ivyreg, vcov. = ivyreg$vcovHC_)
 
 In this instrumental variables regression model, the final average screen time (`screen_time_avg_final`) is regressed on actual treatment (`greyscale_binary`) using treatment assignment(`treatment`) as an instrument. The results suggest that turning on greyscale increased screentime usage among Compliers by 4.7% with a 95% confidence interval of 1.89498. However, the results suggest that this effect is not statistically insignificant. 
 
+### Comparing different models
 
-## Extreme Error Bounds
+```{r}
+mod1 <- data[,lm(screen_time_avg_final ~ treatment)]
+mod2 <- data[,lm(screen_time_avg_final ~ treatment + screen_time_avg_initial)]
+mod3 <- data[,lm(screen_time_avg_final ~ treatment + screen_time_avg_initial + as.factor(country))]
+mod4 <- ate
+
+model_anova <- anova(mod1,mod4)
+model_anova
+```
+
+The increased information from the added covariates does improve the performance of the causal model. The F-test indicates that the inclusion of these covariates changes the standard errors of the estimates a statistically significant amount. Without the block fixed effects, the estimate has greater variance. The anova test has a p-value of 0.0001938 which suggests that there is a statistically significant difference in the different treatment effects for the added covariates.
+
+
+
+## Estimating ATE, ITT, and CACE taking into account Attrition with Extreme Error Bounds
+
+In this section, we take into account Attrition using Extreme Error Bounds.
 
 ### Minimum bound
 
+We assume that all of the data we did not observe was actually a very small value (the minimum value).
+
 ```{r}
-#  assume that all of the data that you did not observe was actually a very small value
 min <- data[, min(screen_time_avg_final, na.rm = TRUE)]
 data[, low_screen_time := screen_time_avg_final]
 data[is.na(low_screen_time), low_screen_time := min]
@@ -278,8 +301,9 @@ In this instrumental variables regression model, the final average screen time, 
 
 ### Maximum bound
 
+We assume that all the data that we did not observe was actually a very high value (the maximum value)
+
 ```{r}
-#  assume that all of the data that you did not observe was actually a very high value
 max <- data[, max(screen_time_avg_final, na.rm = TRUE)]
 data[, high_screen_time := screen_time_avg_final]
 data[is.na(high_screen_time), high_screen_time := max]
@@ -304,7 +328,6 @@ coeftest(itt_max, vcov. = itt_max$vcovHC_)
 
 In this analysis, the final average screen time, bounded by the extreme maximum, (`high_screen_time`) is regressed on treatment assignment (`treatment`). Screen time is a continuous variable in units of hours and treatment assignment (`treatment`) is scored 1 if the subject was assigned to the treatment group and 0 otherwise. The ITT is -1.57130 with a 95% confidence interval of 1.75706. This result is slightly statistically significant.
 
-
 ```{r}
 # using ivyreg to calculate CACE
 ivyreg_max <- data[, ivreg(high_screen_time ~ greyscale_binary, ~treatment)]
@@ -316,8 +339,9 @@ In this instrumental variables regression model, the final average screen time, 
 
 ### Mean bound
 
+We assume that all of the data that we did not observe was actually the average value. 
+
 ```{r}
-#  assume that all of the data that you did not observe was actually the average value
 mean <- data[ , mean(screen_time_avg_final, na.rm = TRUE)]
 
 data[ , mean_screen_time := screen_time_avg_final]
@@ -366,3 +390,5 @@ stargazer(
   omit.stat = c('ser', 'F')
 )
 ```
+
+Using Extreme Error Bounds to account for those who attrited, we see that the treatment effect can range anywhere between -1.581 to 0.957.
