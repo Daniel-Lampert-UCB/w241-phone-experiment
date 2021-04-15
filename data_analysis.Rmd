@@ -31,6 +31,7 @@ control_final <- read_excel("groupB_final.xlsx")
 ```
 
 
+
 ## Cleaning data
 ```{r}
 # dropping and renaming columns
@@ -69,11 +70,14 @@ clean_initial_data <- function(data, treatment = FALSE) {
   
   # standardizing 'United States' label
   data$country <- ifelse((data$country == 'Mexico')|(data$country == 'MX')|(data$country == 'Mx')|(data$country == 'mexico')|(data$country == 'México'),             'Mexico', 'United States' )
+  
+  
   # convert date to readable type
   data$date <- as.Date(data$date, origin = "1899-12-30")
   
   # create a variable to indicate which group (first cohort or second) based on date
-  data[,first_group := (as.numeric(as.Date(data$date, origin = "1899-12-30") < "2021-03-23"))]
+  data[,first_group := ifelse(as.numeric(as.Date(data$date, origin = "1899-12-30") < "2021-03-23"), 1, 0)]
+  
   
   return(data)
 }
@@ -117,10 +121,16 @@ clean_final_data <- function(data, treatment = FALSE) {
   data[, screen_time_avg_final := (rowMeans(data[,c('screen_time_1', 'screen_time_2', 'screen_time_3')]))]
   
   # convert date to readable type
-  data$date <- as.Date(data$date, origin = "1899-12-30")
+  data[, date := as.Date(date, origin = "1899-12-30")]
+  #data$date <- as.Date(data$date, origin = "1899-12-30")
   
   # create a variable to indicate which group (first cohort or second) based on date
-  data[,first_group := (as.numeric(as.Date(data$date, origin = "1899-12-30") < "2021-03-26"))]
+  
+  #data[, group_no := ifelse(date > as.Date("2021-03-23", origin = "1899-12-30"), 1, 0)]
+  data[,first_group := ifelse(as.Date(data$date, origin = "1899-12-30") < "2021-03-26", 1,0 )]
+  #data[, first_group_binary := first_group]
+  
+  #data[is.na(first_group_binary), first_group_binary:=0]
   
   return(data)
 }
@@ -132,7 +142,11 @@ treatment_initial <- clean_initial_data(treatment_initial, treatment = TRUE)
 control_initial <- clean_initial_data(control_initial, treatment = FALSE)
 treatment_final <- clean_final_data(treatment_final, treatment = TRUE)
 control_final <- clean_final_data(control_final, treatment = FALSE)
+head(treatment_final)
 ```
+
+
+
 
 
 ```{r}
@@ -162,6 +176,12 @@ data <- rbind(treatment,control, fill=TRUE)
 # drop people who have NA values for both screen_time_avg_final and screen_time_avg_initial
 # issue with qualtrics for not getting their data for some reason
 data <- data[!with(data,is.na(screen_time_avg_initial)& is.na(screen_time_avg_final)),]
+
+```
+
+```{r}
+#Replace NA with zero for individuals in second group
+data[is.na(first_group), first_group := 0]
 ```
 
 
@@ -202,7 +222,7 @@ ggplot(data, aes(`diff`, fill = factor(treatment))) + geom_histogram(alpha = 0.2
 
 ```{r}
 # making greyscale (receiving treatment) and iphone variables binary for analysis
-
+data[, country_binary := ifelse(country == "Mexico", 1, 0)]
 data[, greyscale_binary := ifelse(greyscale =='Yes', 1, 0)]
 data[is.na(greyscale_binary), greyscale_binary:=0]
 # makes iphone column binary (iphone = 1, android = 0)
@@ -211,7 +231,7 @@ data$iphone <- as.numeric(data$iphone == 'IPhone')
 
 ```{r}
 # estimating average treatment effect
-ate <- data[, lm(screen_time_avg_final~ treatment + screen_time_avg_initial + as.factor(country) + iphone)]
+ate <- data[, lm(screen_time_avg_final~ treatment + screen_time_avg_initial + country_binary + iphone + first_group)]
 ate$vcovHC_ <- vcovHC(ate)
 coeftest(ate, vcov. = ate$vcovHC_)
 ```
@@ -245,14 +265,18 @@ In this instrumental variables regression model, the final average screen time (
 ```{r}
 mod1 <- data[,lm(screen_time_avg_final ~ treatment)]
 mod2 <- data[,lm(screen_time_avg_final ~ treatment + screen_time_avg_initial)]
-mod3 <- data[,lm(screen_time_avg_final ~ treatment + screen_time_avg_initial + as.factor(country))]
+mod3 <- data[,lm(screen_time_avg_final ~ treatment + screen_time_avg_initial + country_binary)]
 mod4 <- ate
+mod5 <- data[,lm(screen_time_avg_final ~ treatment + screen_time_avg_initial + country_binary + first_group)]
+model_anova1 <- anova(mod1,mod4, test = "F")
+model_anova1
+model_anova2 <- anova(mod1,mod5, test = "F")
 
-model_anova <- anova(mod1,mod4)
-model_anova
+model_anova3 <- anova(mod4,mod5, test = "F")
+model_anova3
 ```
 
-The increased information from the added covariates does improve the performance of the causal model. The F-test indicates that the inclusion of these covariates changes the standard errors of the estimates a statistically significant amount. Without the block fixed effects, the estimate has greater variance. The anova test has a p-value of 0.0001938 which suggests that there is a statistically significant difference in the different treatment effects for the added covariates.
+The increased information from the added covariates does improve the performance of the causal model. The F-test indicates that the inclusion of these covariates changes the standard errors of the estimates a statistically significant amount. Without the block fixed effects, the estimate has greater variance. The anova test has a p-value of 0.0001938 which suggests that there is a statistically significant difference in the different treatment effects for the added covariates. However, the addition of the study date for the two study groups does not appear to have any effect. We thought that the study date, in particular days of the week, would be more indicative of screen time.
 
 
 
@@ -272,7 +296,7 @@ data[is.na(low_screen_time), low_screen_time := min]
 
 ```{r}
 # estimating average treatment effect
-ate_min <- data[, lm(low_screen_time ~ treatment + screen_time_avg_initial + as.factor(country) + iphone)]
+ate_min <- data[, lm(low_screen_time ~ treatment + screen_time_avg_initial + country_binary + iphone)]
 ate_min$vcovHC_ <- vcovHC(ate_min)
 coeftest(ate_min, vcov. = ate_min$vcovHC_)
 ```
@@ -297,7 +321,7 @@ ivyreg_min$vcovHC_ <- vcovHC(ivyreg_min)
 coeftest(ivyreg_min, vcov. = ivyreg_min$vcovHC_)
 ```
 
-In this instrumental variables regression model, the final average screen time, bounded by the extreme minimum, (`low_screen_time`) is regressed on actual treatment (`greyscale_binary`) using treatment assignment(`treatment`) as an instrument. The results suggest that turning on greyscale increased screentime usage among Compliers by 115.32% with a 95% confidence interval of 1.52946. However, the results suggest that this effect is not statistically insignificant.
+In this instrumental variables regression model, the final average screen time, bounded by the extreme minimum, (`low_screen_time`) is regressed on actual treatment (`greyscale_binary`) using treatment assignment(`treatment`) as an instrument. The results suggest that turning on greyscale increased screentime usage among Compliers by 115.32% with a 95% confidence interval of 1.52946. However, the results suggest that this effect is not statistically insignificant. Moreover, it illustrates that the estimate of the ATE lacks precision.
 
 ### Maximum bound
 
@@ -311,7 +335,7 @@ data[is.na(high_screen_time), high_screen_time := max]
 
 ```{r}
 # estimating average treatment effect
-ate_max <- data[, lm(high_screen_time ~ treatment + screen_time_avg_initial + as.factor(country) + iphone)]
+ate_max <- data[, lm(high_screen_time ~ treatment + screen_time_avg_initial + country_binary + iphone)]
 ate_max$vcovHC_ <- vcovHC(ate_max)
 coeftest(ate_max, vcov. = ate_max$vcovHC_)
 ```
@@ -346,7 +370,7 @@ mean <- data[ , mean(screen_time_avg_final, na.rm = TRUE)]
 
 data[ , mean_screen_time := screen_time_avg_final]
 data[is.na(mean_screen_time), mean_screen_time := mean]
-ate_mean <- data[, lm(mean_screen_time ~ treatment + screen_time_avg_initial + as.factor(country) + iphone)]
+ate_mean <- data[, lm(mean_screen_time ~ treatment + screen_time_avg_initial + country_binary + iphone)]
 ate_mean$vcovHC_ <- vcovHC(ate_mean)
 coeftest(ate_mean, vcov. = ate_mean$vcovHC_)
 ```
@@ -392,3 +416,12 @@ stargazer(
 ```
 
 Using Extreme Error Bounds to account for those who attrited, we see that the treatment effect can range anywhere between -1.581 to 0.957.
+
+```{r}
+head(data)
+```
+
+
+
+
+
