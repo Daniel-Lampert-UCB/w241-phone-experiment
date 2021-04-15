@@ -216,9 +216,41 @@ ggplot(data, aes(`diff`, fill = factor(treatment))) + geom_histogram(alpha = 0.2
 ```
 
 
+```{r}
+library("ggpubr")#screen_time_avg_final - screen_time_avg_initial
+before <- data[, screen_time_avg_initial]
+after <- data[, screen_time_avg_final ]
+paired_data <- data.frame( 
+                group = rep(c("before", "after"), each = 30),
+                weight = c(before,  after)
+                )
+
+ggboxplot(paired_data, x = "group", y = "weight", 
+          color = "group", palette = c("#00AFBB", "#E7B800"),
+          order = c("before", "after"),
+          ylab = "Weight", xlab = "Groups")
+
+```
+
+
 ## Estimating ATE, ITT, and CACE ignoring attrition
 
 **A quick review:** The Average Treatment Effect (ATE) measures the effect of treatment on randomly selected person. Intent-to-Treat (ITT) measures the effect of being made eligible for treatment, regardless of the fraction of the treatment group that's actually treated. The Complier Average Causal Effect (CACE) is the average treatment effect of compliers. It can also be defined as ITT/ITT_D, where ITT_D is the difference between the proportion of subjects who are treated in the event that they are assigned to the treatment group and the proportion who would be treated even if they had been assigned to the control group.
+
+
+### Using paired T-test
+
+```{r}
+#paired t test
+#data[, screen_time_difference := screen_time_avg_final - screen_time_avg_initial]
+#before <- data[, screen_time_avg_initial]
+#after <- data[, screen_time_avg_final ]
+t_test <- t.test(before, after, paired = T)
+t_test
+
+```
+
+
 
 ```{r}
 # making greyscale (receiving treatment) and iphone variables binary for analysis
@@ -417,9 +449,7 @@ stargazer(
 
 Using Extreme Error Bounds to account for those who attrited, we see that the treatment effect can range anywhere between -1.581 to 0.957.
 
-```{r}
-head(data)
-```
+
 # Lets look at power. 
 ```{r}
 power_test_t <- function(
