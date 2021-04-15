@@ -420,6 +420,57 @@ Using Extreme Error Bounds to account for those who attrited, we see that the tr
 ```{r}
 head(data)
 ```
+# Lets look at power. 
+```{r}
+power_test_t <- function(
+  mean_control = 5.168588, 
+  mean_treat = 4.934875, 
+  sd_control = 2.848298, 
+  sd_treat = 3.253208,
+  number_per_condition = 50, 
+  power_loops = 100, 
+  ri_loops = 100, 
+  verbose = TRUE) { 
+    p_values <- NA   
+    ri <- NA 
+    d <- data.table()
+  
+    d[ , condition := rep(c('control', 'treatment'), each = number_per_condition)]  
+  
+    for(power_loop in 1:power_loops) { 
+      if(verbose == TRUE) {
+        if(power_loop %% 10 == 0) {
+          cat(sprintf('Loop Number: %.0f\n', power_loop))
+        }
+      } 
+      
+      # d[condition == 'control',   Y := rnorm(.N, mean = mean_control, sd = sd_control)]
+      # d[condition == 'treatment', Y := rnorm(.N, mean = mean_treat, sd = sd_treat)]
+      # 
+      # ate <- d[ , mean(Y), keyby = condition][ , diff(V1)]
+      # 
+      # for(ri_loop in 1:ri_loops) { 
+      #   ri[ri_loop] <- d[ , mean(Y), keyby = sample(condition)][ , diff(V1)]
+      #   }
+      # 
+      # p_values[power_loop] <- mean(abs(ri) > abs(ate))
+      
+      p_values[power_loop] <- t.test(
+        x = rnorm(number_per_condition, mean = mean_control, sd = sd_control), 
+        y = rnorm(number_per_condition, mean = mean_treat, sd = sd_treat)
+      )$p.value
+    }
+      
+    return(list(
+      'p_values' = p_values, 
+      'power' = mean(p_values < 0.05)
+      ))
+}
+```
+
+```{r}
+power_test_t()$power
+```
 
 
 
